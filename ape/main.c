@@ -71,6 +71,22 @@
 static NetworkPort_t *gPort;
 static uint32_t gResetTime;
 
+void handleDriverEvent(volatile SHM_t *shm)
+{
+    RegSHMEventStatus_t event = shm->EventStatus;
+
+    if (event.bits.Pending)
+    {
+        APE_aquireMemLock();
+        // TODO: Handle the event from the driver.
+        Timer_delayMs(20);
+        shm->EventStatus.r32 = 0;
+        APE_releaseMemLock();
+
+        printf("APE Event: %x\n", event.r32);
+    }
+}
+
 void handleCommand(volatile SHM_t *shm)
 {
     uint32_t command = shm->LoaderCommand.bits.Command;
@@ -81,6 +97,8 @@ void handleCommand(volatile SHM_t *shm)
 
     uint32_t arg0 = shm->LoaderArg0.r32;
     uint32_t arg1 = shm->LoaderArg1.r32;
+
+    printf("Loader Command: %x (%x, %x)\n", command, arg0, arg1);
 
     switch (command)
     {
@@ -328,10 +346,14 @@ void initSHM(volatile SHM_t *shm)
     features.r32 = 0;
     features.bits.NCSI = 1;
 
+    shm->SegMessageBufferOffset.r32 = 0x30; // Scratchbad buffer start.
+    shm->SegMessageBufferLength.r32 = 0x8; // Scratchbad buffer available length - 8 bytes before loader handler.
+
     shm->FwVersion.r32 = (VERSION_MAJOR << 24) | (VERSION_MINOR << 16) | VERSION_PATCH; //lint !e835
     shm->FwFeatures.r32 = features.r32;
     shm->FwStatus.r32 = status.r32;
 
+    shm->ApeSegLength.r32 = 0x200;
     shm->SegSig.r32 = 'APE!'; //lint !e742
 }
 
@@ -341,7 +363,6 @@ void __attribute__((noreturn)) loaderLoop(void)
     bool reset_allowed = host_state == SHM_HOST_DRIVER_STATE_STATE_START;
 
     // Update SHM.Sig to signal ready.
-    SHM.SegSig.bits.Sig = SHM_SEG_SIG_SIG_LOADER;
     initSHM(&SHM);
     initSHM(&SHM1);
     initSHM(&SHM2);
@@ -438,6 +459,10 @@ void __attribute__((noreturn)) loaderLoop(void)
         handleCommand(&SHM1);
         handleCommand(&SHM2);
         handleCommand(&SHM3);
+        handleDriverEvent(&SHM);
+        handleDriverEvent(&SHM1);
+        handleDriverEvent(&SHM2);
+        handleDriverEvent(&SHM3);
     }
 }
 
