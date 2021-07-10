@@ -1,10 +1,10 @@
 ################################################################################
 ###
-### @file       CMakeLists.txt
+### @file       ape.ld
 ###
-### @project
+### @project    bcm5719
 ###
-### @brief      Top level CMake file
+### @brief      APE linker script
 ###
 ################################################################################
 ###
@@ -42,47 +42,60 @@
 ### @endcond
 ################################################################################
 
-enable_testing()
-include(GoogleTest)
+ENTRY(__start)
 
-SET(COMPILER_BASE       $ENV{HOME}/llvm-bcm5719)
+MEMORY
+{
+    RAM     (rwx) : ORIGIN = 0x00100000, LENGTH = 64K
+    DRAM    (rw)  : ORIGIN = 0x00110000, LENGTH = 24K
+    STACK   (rw)  : ORIGIN = 0x00116000, LENGTH = 8K
+}
 
-
-FIND_PROGRAM(CMAKE_C_COMPILER
-            NAMES flint_bcm5719-clang clang
-            HINTS ${COMPILER_BASE}/bin/
-            NO_DEFAULT_PATH
-            REQUIRED)
-
-FIND_PROGRAM(CMAKE_CXX_COMPILER
-            NAMES flint_bcm5719-clang++ clang++
-            HINTS ${COMPILER_BASE}/bin/
-            NO_DEFAULT_PATH
-            REQUIRED)
-
-SET(CMAKE_ASM_COMPILER  ${COMPILER_BASE}/bin/clang)
-
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions")
-
-include(cmake/version.cmake)
-
-cmake_minimum_required(VERSION 3.5.1)
-project(bcm5719-fw VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
-include(cmake/clang-format.cmake)
-include(cmake/clang-analyzer.cmake)
-include(cmake/config.cmake)
-
-add_subdirectory(tests)
-
-add_subdirectory(libs)
-add_subdirectory(utils)
+SECTIONS
+{
+    .text : ALIGN(4) SUBALIGN(4)
+    {
+        KEEP(*(.init))
+        _ftext = .;
+        *(.text)
+    } > RAM
+    _etext = .;
 
 
-add_subdirectory(simulator)
-add_subdirectory(stage1)
+    .data : ALIGN(4) SUBALIGN(4)
+    {
+        _fdata = .;
+        *(.data*)
+        *(.rodata*)
+    } > DRAM
+    _edata = .;
 
-add_subdirectory(ape)
-add_subdirectory(ape_lwip)
+    .bss : ALIGN(4) SUBALIGN(4)
+    {
+        _fbss = .;
+        *(.bss*)
+    } > DRAM
+    _ebss = .;
+    _fheap = .;
 
-add_subdirectory(fwupd)
+    .stack (NOLOAD) : ALIGN(4) SUBALIGN(4)
+    {
+        _eheap = .;
+        _fstack = .;
+        _estack = 0x00118000;
+    } > STACK
+
+    _eram = 0x00118000;
+
+    /DISCARD/ :
+    {
+        *(.comment)
+        *(.note.GNU-stack)
+        *(.eh_frame)
+        *(.got)
+        *(.ARM.exidx*)
+        *(.reginfo)
+        *(.mdebug.abi32)
+        *(.pdr)
+    }
+}
