@@ -11,3 +11,6 @@
 [submodule "libs/lwip/lwip"]
 	path = libs/lwip/lwip
 	url = https://github.com/lwip-tcpip/lwip.git
+[submodule "libs/lwip/mbedtls"]
+	path = libs/lwip/mbedtls
+	url = ../../ARMmbed/mbedtls
